@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Test & Lint
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11"]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Lint with ruff
+        run: ruff check backend/ tests/
+
+      - name: Type check with mypy
+        run: mypy backend/ --ignore-missing-imports --no-strict-optional
+
+      - name: Run tests
+        env:
+          GROQ_API_KEY: ""
+          OPENAI_API_KEY: ""
+        run: pytest tests/ -v --tb=short --cov=backend --cov-report=term-missing
+
+  docker-build:
+    name: Docker Build Check
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build backend image
+        run: docker build -f docker/Dockerfile.backend -t codesense-backend .
+
+      - name: Build frontend image
+        run: docker build -f docker/Dockerfile.frontend -t codesense-frontend .
