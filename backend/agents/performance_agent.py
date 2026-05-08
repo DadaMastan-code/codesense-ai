@@ -6,7 +6,6 @@ from backend.models.schemas import (
     ComplexityInfo,
     PerformanceIssue,
     PerformanceReport,
-    Severity,
 )
 from backend.utils.llm_client import call_llm_json
 from backend.utils.severity_scorer import score_from_findings

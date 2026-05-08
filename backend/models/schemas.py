@@ -177,7 +177,7 @@ class CodeSenseScore(BaseModel):
         performance: float,
         architecture: float,
         documentation: float,
-    ) -> "CodeSenseScore":
+    ) -> CodeSenseScore:
         total = (
             security * 0.40
             + performance * 0.30

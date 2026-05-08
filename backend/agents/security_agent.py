@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 
-from backend.models.schemas import SecurityFinding, SecurityReport, Severity
+from backend.models.schemas import SecurityFinding, SecurityReport
 from backend.utils.llm_client import call_llm_json
 from backend.utils.severity_scorer import score_from_findings
 

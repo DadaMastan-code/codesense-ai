@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from backend.models.schemas import Severity
 
-
 _SEVERITY_PENALTIES: dict[Severity, float] = {
     Severity.CRITICAL: 40.0,
     Severity.HIGH: 20.0,

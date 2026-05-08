@@ -1,0 +1,151 @@
+name: CodeSense Self-Review
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+jobs:
+  self-review:
+    name: AI Code Review (CodeSense)
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Start CodeSense backend
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          uvicorn backend.main:app --host 0.0.0.0 --port 8000 &
+          echo "Waiting for backend to start..."
+          for i in $(seq 1 15); do
+            if curl -s http://localhost:8000/health | grep -q '"status":"ok"'; then
+              echo "Backend ready."
+              break
+            fi
+            sleep 2
+          done
+
+      - name: Get changed files diff
+        id: diff
+        run: |
+          git fetch origin ${{ github.base_ref }}
+          DIFF=$(git diff origin/${{ github.base_ref }}...HEAD -- '*.py' '*.js' '*.ts' '*.java' '*.go' '*.rs' | head -c 25000)
+          if [ -z "$DIFF" ]; then
+            echo "No code changes to review."
+            echo "skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "$DIFF" > /tmp/pr_diff.txt
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run CodeSense analysis
+        if: steps.diff.outputs.skip != 'true'
+        id: review
+        run: |
+          DIFF_CONTENT=$(cat /tmp/pr_diff.txt)
+          RESPONSE=$(curl -s -X POST http://localhost:8000/analyze \
+            -H "Content-Type: application/json" \
+            -d "{\"code\": $(echo "$DIFF_CONTENT" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))'), \"context\": \"GitHub PR #${{ github.event.pull_request.number }}: ${{ github.event.pull_request.title }}\"}" \
+          )
+          echo "$RESPONSE" > /tmp/review_result.json
+          OVERALL=$(echo "$RESPONSE" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('score',{}).get('total',0))")
+          RATING=$(echo "$RESPONSE" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('score',{}).get('rating','UNKNOWN'))")
+          echo "overall=$OVERALL" >> $GITHUB_OUTPUT
+          echo "rating=$RATING" >> $GITHUB_OUTPUT
+
+      - name: Format and post review comment
+        if: steps.diff.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 << 'EOF'
+          import json, subprocess, sys
+
+          with open("/tmp/review_result.json") as f:
+              data = json.load(f)
+
+          score = data.get("score", {})
+          sec = data.get("security", {})
+          perf = data.get("performance", {})
+          arch = data.get("architecture", {})
+          tests = data.get("tests", {})
+          docs = data.get("documentation", {})
+          fix = data.get("fix", {})
+          elapsed = data.get("analysis_time_seconds", 0)
+
+          total = score.get("total", 0)
+          rating = score.get("rating", "UNKNOWN")
+
+          rating_emoji = {"EXCELLENT": "🟢", "GOOD": "🔵", "NEEDS WORK": "🟡", "POOR": "🟠", "CRITICAL": "🔴"}.get(rating, "⚪")
+
+          lines = [
+              "## 🔍 CodeSense AI Self-Review",
+              "",
+              f"**{rating_emoji} Overall Score: `{total:.0f}/100`** — {rating}",
+              "",
+              "| Agent | Score | Issues |",
+              "|---|---|---|",
+              f"| 🔒 Security | `{score.get('security', 0):.0f}/100` | {len(sec.get('findings', []))} findings |",
+              f"| ⚡ Performance | `{score.get('performance', 0):.0f}/100` | {len(perf.get('issues', []))} findings |",
+              f"| 🏗️ Architecture | `{score.get('architecture', 0):.0f}/100` | {len(arch.get('suggestions', []))} suggestions |",
+              f"| 🧪 Tests | — | {len(tests.get('test_cases', []))} test cases generated |",
+              f"| 📝 Docs | `{score.get('documentation', 0):.0f}/100` | {len(docs.get('issues', []))} issues |",
+              "",
+          ]
+
+          criticals = [f for f in sec.get("findings", []) if f.get("severity") in ("CRITICAL", "HIGH")]
+          if criticals:
+              lines.append("### 🚨 Security Issues")
+              lines.append("")
+              for f in criticals[:3]:
+                  lines.append(f"**[{f.get('severity')}] {f.get('title')}**")
+                  lines.append(f"> {f.get('description', '')}")
+                  lines.append(f"> **Fix:** {f.get('fix_recommendation', '')}")
+                  lines.append("")
+
+          diff_preview = fix.get("diff", "")
+          if diff_preview:
+              lines.append("### ✅ Suggested Fixes")
+              lines.append("```diff")
+              lines.append(diff_preview[:1500])
+              lines.append("```")
+              lines.append("")
+
+          lines.append(f"<sub>🤖 Reviewed by [CodeSense AI](https://github.com/DadaMastan-code/codesense-ai) in {elapsed:.1f}s · 6 LangGraph agents</sub>")
+
+          comment_body = "\n".join(lines)
+          result = subprocess.run(
+              ["gh", "pr", "comment", "${{ github.event.pull_request.number }}", "--body", comment_body],
+              capture_output=True, text=True
+          )
+          if result.returncode != 0:
+              print(f"Comment failed: {result.stderr}", file=sys.stderr)
+              sys.exit(1)
+          print("Review comment posted successfully.")
+          EOF
+
+      - name: Skip message (no code changes)
+        if: steps.diff.outputs.skip == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr comment ${{ github.event.pull_request.number }} \
+            --body "## 🔍 CodeSense AI\n\nNo Python/JS/TS/Java/Go/Rust changes detected in this PR — skipping automated review."

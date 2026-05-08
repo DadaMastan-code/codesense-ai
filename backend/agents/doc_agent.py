@@ -4,8 +4,6 @@ import logging
 
 from backend.models.schemas import DocIssue, DocReport
 from backend.utils.llm_client import call_llm_json
-from backend.utils.severity_scorer import score_from_findings
-from backend.models.schemas import Severity
 
 logger = logging.getLogger(__name__)
 

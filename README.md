@@ -1,162 +1,242 @@
-<div align="center">
-
 # 🔍 CodeSense AI
 
-### *Code review powered by a team of AI agents*
+> Autonomous multi-agent code intelligence platform — 6 specialized AI agents review every pull request in parallel, automatically.
 
 [![CI](https://github.com/DadaMastan-code/codesense-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/DadaMastan-code/codesense-ai/actions/workflows/ci.yml)
-[![Python 3.11+](https://img.shields.io/badge/Python-3.11+-3776ab?logo=python&logoColor=white)](https://python.org)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
-[![Groq](https://img.shields.io/badge/Groq-llama--3.3--70b-f55036?logo=groq&logoColor=white)](https://groq.com)
-[![Streamlit](https://img.shields.io/badge/Streamlit-1.41-ff4b4b?logo=streamlit&logoColor=white)](https://streamlit.io)
-[![Docker](https://img.shields.io/badge/Docker-ready-2496ed?logo=docker&logoColor=white)](https://docker.com)
+[![Self-Review](https://github.com/DadaMastan-code/codesense-ai/actions/workflows/self-review.yml/badge.svg)](https://github.com/DadaMastan-code/codesense-ai/actions/workflows/self-review.yml)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115-green.svg)](https://fastapi.tiangolo.com)
+[![LangGraph](https://img.shields.io/badge/LangGraph-orchestration-purple.svg)](https://github.com/langchain-ai/langgraph)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/Tests-61%20passing-22c55e)](tests/)
-
-**CodeSense AI runs 6 specialised AI agents in parallel** — security, performance, architecture, testing, documentation, and auto-fix — and streams results live as each agent completes. Like having a senior engineering team review your code in under 8 seconds.
-
-[**Try it live →**](#quickstart) · [Report Bug](https://github.com/DadaMastan-code/codesense-ai/issues) · [Request Feature](https://github.com/DadaMastan-code/codesense-ai/issues)
-
-</div>
 
 ---
 
-## What Makes This Different
+## What It Does
 
-Most "AI code reviewers" make a single LLM call and return generic suggestions. CodeSense AI is different:
+CodeSense AI runs **6 specialized agents in parallel** on every GitHub pull request:
 
-| Feature | Generic tools | CodeSense AI |
-|---|:---:|:---:|
-| Multiple specialist agents | ❌ | ✅ 6 agents |
-| Parallel execution | ❌ Sequential | ✅ `asyncio.gather()` |
-| OWASP-mapped security findings | ❌ | ✅ Top 10 categorised |
-| Live streaming results (SSE) | ❌ | ✅ Agent-by-agent |
-| Produces fixed code + git diff | ❌ | ✅ |
-| Auto-generates runnable tests | ❌ | ✅ pytest / jest / mocha |
-| Auto-generates docstrings | ❌ | ✅ |
-| Severity scoring (0–100) | ❌ | ✅ Weighted formula |
-| Dockerised + CI/CD | ❌ | ✅ |
+| Agent | What it checks |
+|---|---|
+| 🔒 **Security** | OWASP Top 10, SQL injection, XSS, hardcoded secrets, insecure functions |
+| ⚡ **Performance** | Big-O complexity, N+1 queries, memory leaks, blocking I/O in async code |
+| 🏗️ **Architecture** | SOLID principles, God classes, design pattern opportunities, coupling |
+| 🧪 **Tests** | Coverage gaps, missing edge cases, generates ready-to-run test files |
+| 📝 **Docs** | Missing docstrings, outdated comments, missing type hints — auto-generates them |
+| 🔧 **AutoFix** | Generates a unified diff with all fixes applied — paste-ready code |
+
+Results appear as a structured comment directly on the PR — automatically, without you doing anything.
 
 ---
 
 ## Architecture
 
-```mermaid
-graph TD
-    Dev["👤 Developer"] --> UI["Streamlit UI · port 8501"]
-    UI -->|"POST /analyze/stream"| API["FastAPI Backend · port 8000"]
-    API --> Orch["⚡ Orchestrator\nasyncio.gather()"]
+```
+┌──────────────────────────────────────────────────────────────┐
+│                      CodeSense AI Platform                   │
+│                                                              │
+│   INPUT LAYER                                                │
+│   ┌─────────────┐   ┌─────────────┐   ┌──────────────┐      │
+│   │ Streamlit   │   │  FastAPI    │   │  GitHub      │      │
+│   │ Web UI      │   │  REST API   │   │  Webhook     │      │
+│   └──────┬──────┘   └──────┬──────┘   └──────┬───────┘      │
+│          └─────────────────┴─────────────────┘               │
+│                             │                                │
+│   ORCHESTRATION LAYER (LangGraph StateGraph)                 │
+│                             ▼                                │
+│   ┌────────┐ ┌──────┐ ┌──────┐ ┌───────┐ ┌──────┐          │
+│   │Security│ │ Perf │ │ Arch │ │ Tests │ │ Docs │          │
+│   │ Agent  │ │Agent │ │Agent │ │ Agent │ │Agent │          │
+│   └────┬───┘ └──┬───┘ └──┬───┘ └──┬────┘ └──┬───┘          │
+│        └────────┴─────────┴────────┴──────────┘              │
+│                             │ fan-in (all 5 complete)        │
+│                             ▼                                │
+│                    ┌─────────────────┐                       │
+│                    │  AutoFix Agent  │                       │
+│                    └────────┬────────┘                       │
+│                             │                                │
+│   STORAGE LAYER              ▼                               │
+│   ┌──────────────────────────────────────────────────────┐   │
+│   │  Evolution Tracker (SQLite)                          │   │
+│   │  PR #1: 67/100 → PR #10: 82/100 → PR #25: 94/100   │   │
+│   └──────────────────────────────────────────────────────┘   │
+└──────────────────────────────────────────────────────────────┘
+```
 
-    Orch --> SA["🔐 Security Agent\nOWASP Top 10 audit"]
-    Orch --> PA["📈 Performance Agent\nBig-O · N+1 · leaks"]
-    Orch --> AA["🏗 Architecture Agent\nSOLID · DRY · patterns"]
-    Orch --> TA["🧪 Test Agent\nRunnable test suites"]
-    Orch --> DA["📚 Doc Agent\nDocstrings + summary"]
+**Tech stack:** FastAPI · LangGraph · Groq (llama-3.3-70b) · LangSmith · Streamlit · SQLite · Docker · GitHub Actions
 
-    SA & PA & AA & TA & DA -->|"all findings"| FA["🔧 Fix Agent\nUnified corrected code + diff"]
-    FA --> Score["📊 CodeSense Score\n0–100 weighted"]
-    Score --> UI
+---
 
-    API <-->|"primary"| Groq["Groq API\nllama-3.3-70b · 400+ tok/s"]
-    API <-.->|"fallback"| OAI["OpenAI GPT-4o"]
+## GitHub Webhook — Set It and Forget It
+
+Set up once; every PR gets reviewed automatically in ~15 seconds.
+
+### 5-step setup
+
+**1. Get a GitHub token**
+Settings → Developer settings → Personal access tokens → New token
+Scopes: `repo`, `write:discussion`
+
+**2. Generate a webhook secret**
+```bash
+python3 -c "import secrets; print(secrets.token_hex(32))"
+```
+
+**3. Add secrets to your repo**
+Settings → Secrets and variables → Actions:
+- `GROQ_API_KEY` — get free at [console.groq.com](https://console.groq.com)
+- `GITHUB_WEBHOOK_SECRET` — generated above
+- `GITHUB_TOKEN` — your personal access token
+
+**4. Deploy the backend** (see [Deployment](#deployment)) and note the URL
+
+**5. Add webhook in your GitHub repo**
+Settings → Webhooks → Add webhook:
+- Payload URL: `https://your-backend.render.com/webhook/github`
+- Content type: `application/json`
+- Secret: your generated secret
+- Events: Pull requests only ✓
+
+That's it. Open a PR and watch the review appear automatically.
+
+---
+
+## GitHub Self-Review
+
+The meta-feature: **CodeSense AI reviews its own pull requests using itself.**
+
+The `.github/workflows/self-review.yml` workflow:
+1. Spins up the FastAPI backend in the CI runner
+2. Fetches the PR diff (Python, JS, TS, Java, Go, Rust files)
+3. Runs all 6 agents via the local API
+4. Posts a full structured review comment on the PR
+
+This activates automatically on every PR to `main`. Add `GROQ_API_KEY` as a GitHub Actions secret to enable it.
+
+---
+
+## Evolution Dashboard
+
+Track code quality across pull requests over time:
+
+```
+Score
+100 │                              ●──●
+ 90 │              ●──●──●
+ 80 │    ●──●──●
+ 70 │ ●
+ 60 │
+    └────────────────────────────────▶ PRs over time
+    PR1  PR5  PR10  PR15  PR20  PR25
+```
+
+Every webhook-triggered PR review is saved to SQLite. The **📊 Evolution** page in the Streamlit sidebar shows:
+- Overall score trend with colour-coded bands (Excellent / Good / Needs Work / Critical)
+- Per-agent score breakdown (Security, Performance, Architecture, Docs)
+- Critical issues per review (stacked bar chart)
+- Full review history table
+
+**API endpoints:**
+```
+GET /evolution/repos          — list all tracked repos
+GET /evolution/history        — full history (filter by ?repo=owner/repo)
 ```
 
 ---
 
-## Quickstart
+## LangSmith Tracing (Optional)
 
-### Run locally in 3 commands
+Full observability for every agent call — token usage, latency, and traces in [LangSmith](https://smith.langchain.com):
 
+```env
+LANGSMITH_API_KEY=your_key_here
+LANGSMITH_PROJECT=codesense-ai
+LANGSMITH_TRACING_ENABLED=true
+```
+
+When configured, every LangGraph node execution is traced automatically. If not set, tracing is silently skipped — zero overhead.
+
+---
+
+## Quick Start
+
+### Prerequisites
+- Python 3.11+
+- Groq API key (free at [console.groq.com](https://console.groq.com)) OR OpenAI key
+
+### 1. Clone & install
 ```bash
 git clone https://github.com/DadaMastan-code/codesense-ai.git
 cd codesense-ai
-cp .env.example .env          # add your GROQ_API_KEY (free at console.groq.com)
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
 ```
 
+### 2. Configure
 ```bash
-# Terminal 1 — backend
-pip install -r requirements.txt
-uvicorn backend.main:app --reload --port 8000
+cp .env.example .env
+# Edit .env — add your GROQ_API_KEY at minimum
+```
 
-# Terminal 2 — frontend
+### 3. Run
+```bash
+# Terminal 1: Backend
+uvicorn backend.main:app --reload
+
+# Terminal 2: Frontend
 streamlit run frontend/app.py
 ```
 
-Open **http://localhost:8501** — load one of the 5 built-in buggy code examples and click **Analyse Code**.
+Open [http://localhost:8501](http://localhost:8501) — paste code, click Analyse.
 
-### Run with Docker (one command)
-
+### Docker Compose
 ```bash
-docker-compose -f docker/docker-compose.yml up
+docker compose -f docker/docker-compose.yml up
 ```
-
-Both services start automatically. Backend at `localhost:8000`, frontend at `localhost:8501`.
-
----
-
-## How It Works
-
-### The 6-Agent Pipeline
-
-When you submit code, the orchestrator fires **five agents simultaneously** via `asyncio.gather()`. As each completes, its results stream to the UI in real time via **Server-Sent Events (SSE)**. After all five finish, the Fix Agent synthesises a unified corrected version.
-
-| Agent | Responsibility | Output |
-|---|---|---|
-| 🔐 **Security** | OWASP Top 10 — injection, XSS, secrets, auth flaws, SSRF | Severity-ranked findings with fix recommendations |
-| 📈 **Performance** | Big-O per function, N+1 queries, memory leaks, blocking I/O | Before/after code snippets with expected improvement |
-| 🏗 **Architecture** | SOLID checklist, coupling, god classes, design patterns | EXCELLENT / GOOD / NEEDS WORK / POOR rating |
-| 🧪 **Tests** | Happy path, edge cases, error cases, boundary values | Complete, immediately runnable test file |
-| 📚 **Docs** | Missing docstrings, confusing names, type hints | Fully documented version of the code |
-| 🔧 **Fix** | Synthesises all findings into one corrected file | Fixed code + unified git diff + change log |
-
-### Scoring Formula
-
-```
-CodeSense Score = Security×40% + Performance×30% + Architecture×20% + Documentation×10%
-
-≥ 90  →  EXCELLENT   ·   70–89  →  GOOD   ·   40–69  →  NEEDS WORK   ·   < 40  →  CRITICAL
-```
-
-Each agent independently penalises its score based on finding severity:
-`CRITICAL −40pts · HIGH −20pts · MEDIUM −10pts · LOW −4pts`
 
 ---
 
 ## API Reference
 
-The FastAPI backend exposes a clean REST API with interactive docs at `/docs`.
+Interactive docs: `http://localhost:8000/docs`
 
-```
-POST /analyze           Run all 6 agents in parallel, return when complete
-POST /analyze/stream    SSE stream — results arrive agent-by-agent as they finish
-POST /fix               Fix code given a list of known issues
-POST /generate-tests    Generate a test suite for given code + framework
-GET  /health            Active provider, model, version
-GET  /supported-languages
-```
+| Endpoint | Method | Description |
+|---|---|---|
+| `/analyze` | POST | Full 6-agent analysis (parallel via LangGraph) |
+| `/analyze/stream` | POST | Server-Sent Events — results agent by agent |
+| `/fix` | POST | AutoFix only — pass issue list |
+| `/generate-tests` | POST | Test generation only |
+| `/webhook/github` | POST | GitHub PR webhook handler |
+| `/evolution/history` | GET | Quality score history |
+| `/evolution/repos` | GET | List tracked repositories |
+| `/health` | GET | Health check |
 
-**Example request:**
+### Example request
 ```bash
 curl -X POST http://localhost:8000/analyze \
   -H "Content-Type: application/json" \
-  -d '{"code": "SELECT * FROM users WHERE id=" + user_id, "language": "python"}'
+  -d '{
+    "code": "query = f\"SELECT * FROM users WHERE id={user_id}\"",
+    "language": "python",
+    "context": "auth handler"
+  }'
 ```
 
-**Example response (truncated):**
-```json
-{
-  "language": "python",
-  "score": { "total": 42.0, "rating": "NEEDS WORK", "security": 20.0, "performance": 80.0 },
-  "security": {
-    "findings": [{
-      "severity": "CRITICAL",
-      "title": "SQL Injection",
-      "owasp_category": "A03:2021 - Injection",
-      "fix_recommendation": "Use parameterised queries: cursor.execute('SELECT * FROM users WHERE id=?', (user_id,))"
-    }]
-  }
-}
-```
+---
+
+## Deployment
+
+### Backend → Render (free tier)
+
+1. New **Web Service** on [render.com](https://render.com) — connect this repo
+2. Build: `pip install -r requirements.txt`
+3. Start: `uvicorn backend.main:app --host 0.0.0.0 --port $PORT`
+4. Env vars: `GROQ_API_KEY`, `GITHUB_WEBHOOK_SECRET`, `GITHUB_TOKEN`
+
+### Frontend → Streamlit Cloud (free)
+
+1. [share.streamlit.io](https://share.streamlit.io) — connect this repo
+2. Main file: `frontend/app.py`
+3. Update `API_BASE` in `frontend/app.py` to your Render URL
 
 ---
 
@@ -165,116 +245,64 @@ curl -X POST http://localhost:8000/analyze \
 ```
 codesense-ai/
 ├── backend/
-│   ├── main.py                   # FastAPI app, routes, rate-limiting middleware
 │   ├── agents/
-│   │   ├── security_agent.py     # OWASP Top 10 — carefully crafted system prompt
-│   │   ├── performance_agent.py  # Big-O analysis, N+1, memory leaks
-│   │   ├── architecture_agent.py # SOLID principles, design pattern suggestions
-│   │   ├── test_agent.py         # Runnable test suite generation
-│   │   ├── doc_agent.py          # Docstring generation + plain-English summary
-│   │   └── fix_agent.py          # Unified corrected code + git diff
+│   │   ├── security_agent.py       # OWASP Top 10 checker
+│   │   ├── performance_agent.py    # Big-O + memory analyzer
+│   │   ├── architecture_agent.py   # SOLID + design patterns
+│   │   ├── test_agent.py           # Coverage + test generator
+│   │   ├── doc_agent.py            # Docstring generator
+│   │   └── fix_agent.py            # AutoFix diff generator
+│   ├── api/
+│   │   ├── github_webhook.py       # GitHub PR webhook + comment bot
+│   │   └── evolution_route.py      # Quality history endpoints
+│   ├── evolution/
+│   │   └── tracker.py              # SQLite per-PR quality tracking
 │   ├── pipelines/
-│   │   └── orchestrator.py       # asyncio.gather() + SSE streaming generator
-│   ├── models/
-│   │   └── schemas.py            # Pydantic v2 models for every I/O shape
+│   │   └── orchestrator.py         # LangGraph StateGraph (parallel fan-out)
 │   ├── utils/
-│   │   ├── language_detector.py  # Regex-based, 12 languages, no LLM needed
-│   │   ├── diff_generator.py     # Unified diff + HTML side-by-side diff
-│   │   ├── severity_scorer.py    # Penalty-based 0–100 scorer
-│   │   └── llm_client.py         # Groq/OpenAI client, JSON extraction, retry logic
-│   └── config.py                 # Pydantic settings, loaded from .env
+│   │   ├── llm_client.py           # Groq / OpenAI client with fallback
+│   │   ├── tracing.py              # LangSmith tracing (optional no-op)
+│   │   └── ...
+│   ├── models/schemas.py           # Pydantic v2 schemas
+│   ├── config.py                   # Settings (pydantic-settings)
+│   └── main.py                     # FastAPI app
 ├── frontend/
-│   └── app.py                    # Streamlit UI — 7 tabs, Plotly gauge, SSE streaming
+│   ├── app.py                      # Main analyzer UI
+│   └── pages/
+│       └── 📊_Evolution.py         # Evolution dashboard
 ├── tests/
-│   ├── conftest.py               # Shared fixtures, rate-store reset
-│   ├── test_agents.py            # 40 unit tests — all 6 agents + utilities
-│   └── test_api.py               # 21 integration tests — all 5 endpoints
 ├── docker/
 │   ├── Dockerfile.backend
 │   ├── Dockerfile.frontend
 │   └── docker-compose.yml
-└── .github/workflows/ci.yml      # test → ruff lint → mypy → docker build
+├── .github/workflows/
+│   ├── ci.yml                      # Test → lint → mypy → docker build
+│   └── self-review.yml             # CodeSense reviews its own PRs ✨
+└── requirements.txt
 ```
 
 ---
 
-## Tech Stack
+## What Makes This Different
 
-| Layer | Technology | Why |
-|---|---|---|
-| LLM (primary) | **Groq** — llama-3.3-70b-versatile | Free tier, 400+ tokens/sec — fastest inference available |
-| LLM (fallback) | **OpenAI GPT-4o** | Automatic fallback if Groq key not set |
-| Backend | **FastAPI** + asyncio | Native async, automatic OpenAPI docs, Pydantic validation |
-| Data validation | **Pydantic v2** | Every LLM response validated — no raw string parsing |
-| Streaming | **Server-Sent Events** | Real streaming, not polling |
-| Rate limiting | Custom ASGI middleware | 10 req/min/IP, no Redis dependency |
-| Logging | **structlog** | Structured JSON logs for production observability |
-| Frontend | **Streamlit** + Plotly | Fast to build, beautiful charts |
-| Testing | **pytest** + pytest-asyncio | 61 tests, 100% pass rate |
-| Linting | **ruff** + **mypy** | Fast linting + type safety |
-| Containers | **Docker** + docker-compose | One-command local setup |
-| CI | **GitHub Actions** | Test → lint → type check → Docker build on every push |
+| Basic Code Linters | CodeSense AI |
+|---|---|
+| Rule-based checks only | AI reasoning about context and intent |
+| One dimension (style OR security) | 6 dimensions simultaneously in parallel |
+| No explanation of WHY | Detailed reasoning + OWASP references for every finding |
+| Manual trigger only | Automatic on every GitHub PR via webhook |
+| No memory across PRs | Evolution tracking — sees quality patterns over time |
+| Static suggestions | Auto-fix with unified diff — paste-ready |
 
 ---
 
-## Environment Variables
+## License
 
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| `GROQ_API_KEY` | ✅ (or OpenAI) | — | Free at [console.groq.com](https://console.groq.com) |
-| `OPENAI_API_KEY` | ✅ (or Groq) | — | Fallback if Groq not set |
-| `GROQ_MODEL` | ❌ | `llama-3.3-70b-versatile` | Groq model ID |
-| `MAX_TOKENS` | ❌ | `4096` | Max tokens per LLM call |
-| `TEMPERATURE` | ❌ | `0.1` | Lower = more deterministic output |
-| `RATE_LIMIT_PER_MINUTE` | ❌ | `10` | Requests per IP per minute |
-| `LOG_LEVEL` | ❌ | `INFO` | `DEBUG` / `INFO` / `WARNING` |
-
----
-
-## Running Tests
-
-```bash
-pip install -r requirements-dev.txt
-pytest tests/ -v --cov=backend --cov-report=term-missing
-```
-
-```
-61 passed in 0.24s  ·  Coverage: agents 94%  ·  utils 100%  ·  API 97%
-```
-
----
-
-## Roadmap
-
-The foundation is built. Here's where this goes next:
-
-- [ ] **VS Code extension** — run CodeSense from the command palette without leaving the editor
-- [ ] **GitHub PR bot** — auto-posts a review comment on every pull request
-- [ ] **Full repository analysis** — analyse entire codebases, not just snippets
-- [ ] **Team dashboard** — history, trends, per-developer score over time
-- [ ] **Custom rule sets** — configure which checks matter for your stack
-- [ ] **Webhook support** — trigger analysis from any CI/CD pipeline
-
----
-
-## Contributing
-
-Pull requests are welcome. For major changes, please open an issue first.
-
-```bash
-git clone https://github.com/DadaMastan-code/codesense-ai.git
-cd codesense-ai
-pip install -r requirements-dev.txt
-pytest tests/          # must be green before submitting PR
-ruff check backend/    # must be clean
-```
+MIT — see [LICENSE](LICENSE)
 
 ---
 
 <div align="center">
-
-Built with FastAPI · Groq · Streamlit · ❤️
-
-**[⭐ Star this repo](https://github.com/DadaMastan-code/codesense-ai)** if CodeSense AI helped you write better code.
-
+  Built with FastAPI · LangGraph · Groq (llama-3.3-70b) · Streamlit<br>
+  <a href="https://github.com/DadaMastan-code/codesense-ai">⭐ Star this repo if it helped you</a>
 </div>

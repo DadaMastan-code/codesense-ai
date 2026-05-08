@@ -4,7 +4,7 @@ import json
 import logging
 import time
 from collections import defaultdict
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
 import structlog
 from fastapi import FastAPI, HTTPException, Request
@@ -12,6 +12,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from backend.agents import fix_agent, test_agent
+from backend.api.evolution_route import router as evolution_router
+from backend.api.github_webhook import router as webhook_router
 from backend.config import get_settings
 from backend.models.schemas import (
     AnalyzeRequest,
@@ -54,6 +56,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(webhook_router)
+app.include_router(evolution_router)
 
 # ── In-memory rate limiter ────────────────────────────────────────────────────
 _rate_store: dict[str, list[float]] = defaultdict(list)
